@@ -19,7 +19,7 @@ EXOTEL_API_KEY     = os.getenv("EXOTEL_API_KEY")
 EXOTEL_API_TOKEN   = os.getenv("EXOTEL_API_TOKEN")
 EXOTEL_ACCOUNT_SID = os.getenv("EXOTEL_ACCOUNT_SID", "supernan1")
 EXOTEL_PHONE_NUMBER = os.getenv("EXOTEL_PHONE_NUMBER")
-SERVER_BASE_URL    = os.getenv("SERVER_BASE_URL") or os.getenv("SERVER_WS_BASE_URL", "").replace("wss://", "https://").replace("ws://", "http://")
+SERVER_BASE_URL    = "https://web-production-966f.up.railway.app"
 TEST_CANDIDATE     = os.getenv("TEST_CANDIDATE_NUMBER")
 
 EXOTEL_API_URL = f"https://api.exotel.com/v1/Accounts/{EXOTEL_ACCOUNT_SID}/Calls/connect"
@@ -54,9 +54,9 @@ def make_call(to_number: str, webhook_base_url: str) -> dict:
 
     payload = {
         "From":           to_number,    # candidate's number — Exotel dials this first
-        "To":             from_number,  # ExoPhone — triggers the AI flow
+        "To":             from_number,  # ExoPhone — triggers the Kavitha flow
         "CallerId":       from_number,  # what candidate sees as caller ID
-        "Url":            "http://my.exotel.com/supernan1/exoml/start/1218626",
+        "Url":            "http://my.exotel.com/supernan1/exoml/start_voice/1218626",
         "StatusCallback": status_url,
         "Record":         "false",
     }

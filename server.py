@@ -94,8 +94,8 @@ async def stream(exotel_ws: WebSocket):
                 "conversation_config_override": {
                     "agent": {"agent_id": ELEVENLABS_AGENT_ID},
                     "audio": {
-                        "input":  {"encoding": "mulaw", "sample_rate": 8000},
-                        "output": {"encoding": "mulaw", "sample_rate": 8000},
+                        "input":  {"encoding": "linear16", "sample_rate": 8000},
+                        "output": {"encoding": "linear16", "sample_rate": 8000},
                     },
                 },
             }))

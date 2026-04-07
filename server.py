@@ -146,8 +146,6 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: 
 
 async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: list):
     """Kavitha's voice -> candidate."""
-    seq = 0
-    chunk = 0
     try:
         async for raw in el_ws:
             data = json.loads(raw)
@@ -157,18 +155,11 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                 audio_b64 = data.get("audio_event", {}).get("audio_base_64", "")
                 if audio_b64:
                     stream_sid = stream_sid_holder[0] if stream_sid_holder else ""
-                    seq += 1
-                    chunk += 1
                     try:
                         await exotel_ws.send_text(json.dumps({
                             "event": "media",
-                            "sequence_number": seq,
-                            "stream_sid": stream_sid,
-                            "media": {
-                                "chunk": chunk,
-                                "timestamp": str(chunk * 100),
-                                "payload": audio_b64,
-                            },
+                            "streamSid": stream_sid,
+                            "media": {"payload": audio_b64},
                         }))
                     except Exception:
                         log.info("Exotel WS closed, stopping audio send")

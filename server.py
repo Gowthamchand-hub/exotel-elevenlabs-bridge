@@ -50,7 +50,8 @@ app = FastAPI(title="Exotel-ElevenLabs Bridge")
 @app.api_route("/answer", methods=["GET", "POST"])
 async def answer(request: Request):
     stream_ws_url = f"{get_ws_base_url().rstrip('/')}/stream"
-    log.info(f"Call answered — streaming to {stream_ws_url}")
+    body = await request.body()
+    log.info(f"[ANSWER] method={request.method} params={dict(request.query_params)} body={body[:500]} streaming_to={stream_ws_url}")
 
     exoml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -239,6 +240,13 @@ async def status(request: Request):
 @app.get("/health")
 async def health():
     return JSONResponse({"status": "ok", "agent_id": ELEVENLABS_AGENT_ID})
+
+
+@app.api_route("/{path:path}", methods=["GET", "POST"])
+async def catch_all(request: Request, path: str):
+    body = await request.body()
+    log.info(f"[CATCH-ALL] {request.method} /{path} params={dict(request.query_params)} body={body[:500]}")
+    return Response(status_code=200)
 
 
 if __name__ == "__main__":

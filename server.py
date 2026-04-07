@@ -116,38 +116,27 @@ async def stream(exotel_ws: WebSocket):
 
 async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: list):
     """Candidate's voice -> ElevenLabs."""
-    import base64
     try:
-        while True:
-            msg = await exotel_ws.receive()
-            if msg["type"] == "websocket.disconnect":
-                log.info("Exotel reader disconnected")
-                break
+        async for raw in exotel_ws.iter_text():
+            data = json.loads(raw)
+            event = data.get("event")
 
-            if "bytes" in msg and msg["bytes"]:
-                # Voicebot sends raw binary audio — encode to base64 for ElevenLabs
-                audio_b64 = base64.b64encode(msg["bytes"]).decode("utf-8")
+            if event == "connected":
+                log.info("Exotel stream connected")
+
+            elif event == "start":
+                info = data.get("start", {})
+                stream_sid = info.get("stream_sid") or info.get("streamSid", "")
+                stream_sid_holder.append(stream_sid)
+                log.info(f"Stream started — callSid: {info.get('call_sid')}, streamSid: {stream_sid}")
+
+            elif event == "media":
+                audio_b64 = data["media"]["payload"]
                 await el_ws.send(json.dumps({"user_audio_chunk": audio_b64}))
 
-            elif "text" in msg and msg["text"]:
-                try:
-                    data = json.loads(msg["text"])
-                    event = data.get("event")
-                    if event == "connected":
-                        log.info("Exotel stream connected")
-                    elif event == "start":
-                        info = data.get("start", {})
-                        stream_sid = info.get("streamSid") or info.get("stream_sid", "")
-                        stream_sid_holder.append(stream_sid)
-                        log.info(f"Stream started — callSid: {info.get('callSid')}, streamSid: {stream_sid}")
-                    elif event == "media":
-                        audio_b64 = data["media"]["payload"]
-                        await el_ws.send(json.dumps({"user_audio_chunk": audio_b64}))
-                    elif event == "stop":
-                        log.info("Exotel stream stopped")
-                        break
-                except json.JSONDecodeError:
-                    log.warning(f"Non-JSON text from Exotel (len={len(msg['text'])}), skipping")
+            elif event == "stop":
+                log.info("Exotel stream stopped")
+                break
 
     except WebSocketDisconnect:
         log.info("Exotel reader disconnected")
@@ -165,9 +154,12 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
             if msg_type == "audio":
                 audio_b64 = data.get("audio_event", {}).get("audio_base_64", "")
                 if audio_b64:
-                    import base64
-                    # Send raw binary audio back to Exotel Voicebot
-                    await exotel_ws.send_bytes(base64.b64decode(audio_b64))
+                    stream_sid = stream_sid_holder[0] if stream_sid_holder else ""
+                    await exotel_ws.send_text(json.dumps({
+                        "event": "media",
+                        "streamSid": stream_sid,
+                        "media": {"payload": audio_b64},
+                    }))
 
             elif msg_type == "ping":
                 event_id = data.get("ping_event", {}).get("event_id")

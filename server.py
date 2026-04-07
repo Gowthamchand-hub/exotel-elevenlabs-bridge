@@ -54,10 +54,7 @@ async def answer(request: Request):
 
     exoml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Hello, you have reached the Kavitha AI agent. Please hold.</Say>
-    <Connect>
-        <Stream url="{stream_ws_url}" />
-    </Connect>
+    <Stream url="{stream_ws_url}" />
 </Response>"""
 
     return Response(content=exoml, media_type="application/xml")

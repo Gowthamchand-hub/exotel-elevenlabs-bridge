@@ -15,6 +15,8 @@ import os
 import json
 import asyncio
 import logging
+import audioop
+import base64
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import Response, JSONResponse
@@ -93,7 +95,7 @@ async def stream(exotel_ws: WebSocket):
                     "agent": {"agent_id": ELEVENLABS_AGENT_ID},
                     "audio": {
                         "input":  {"encoding": "linear16", "sample_rate": 8000},
-                        "output": {"encoding": "linear16", "sample_rate": 8000},
+                        "output": {"encoding": "linear16", "sample_rate": 16000},
                     },
                 },
             }))
@@ -154,6 +156,10 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
             if msg_type == "audio":
                 audio_b64 = data.get("audio_event", {}).get("audio_base_64", "")
                 if audio_b64:
+                    # ElevenLabs outputs 16000Hz; resample to 8000Hz for Exotel PSTN
+                    raw = base64.b64decode(audio_b64)
+                    raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
+                    audio_b64 = base64.b64encode(raw).decode()
                     stream_sid = stream_sid_holder[0] if stream_sid_holder else ""
                     try:
                         await exotel_ws.send_text(json.dumps({

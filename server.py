@@ -102,7 +102,6 @@ async def stream(exotel_ws: WebSocket):
             await asyncio.gather(
                 _exotel_to_elevenlabs(exotel_ws, el_ws, stream_sid_holder),
                 _elevenlabs_to_exotel(el_ws, exotel_ws, stream_sid_holder),
-                _keep_alive_silence(exotel_ws, stream_sid_holder),
             )
 
     except WebSocketDisconnect:
@@ -113,35 +112,6 @@ async def stream(exotel_ws: WebSocket):
         log.exception(f"Bridge error: {e}")
     finally:
         log.info("Stream session ended")
-
-
-async def _keep_alive_silence(exotel_ws: WebSocket, stream_sid_holder: list):
-    """Send silent audio frames to Exotel to prevent timeout while waiting for Kavitha."""
-    import base64
-    # 100ms of silence: 8000Hz * 0.1s * 2 bytes = 1600 bytes of zeros
-    silence = base64.b64encode(bytes(1600)).decode("utf-8")
-    seq = 1000
-    chunk = 1000
-    while True:
-        await asyncio.sleep(0.1)
-        if not stream_sid_holder:
-            continue
-        stream_sid = stream_sid_holder[0]
-        seq += 1
-        chunk += 1
-        try:
-            await exotel_ws.send_text(json.dumps({
-                "event": "media",
-                "sequence_number": seq,
-                "stream_sid": stream_sid,
-                "media": {
-                    "chunk": chunk,
-                    "timestamp": str((chunk - 1000) * 100),
-                    "payload": silence,
-                },
-            }))
-        except Exception:
-            break
 
 
 async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: list):

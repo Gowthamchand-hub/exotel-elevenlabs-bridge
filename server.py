@@ -97,9 +97,10 @@ async def stream(exotel_ws: WebSocket):
                 },
             }))
 
+            stream_sid_holder = []
             await asyncio.gather(
-                _exotel_to_elevenlabs(exotel_ws, el_ws),
-                _elevenlabs_to_exotel(el_ws, exotel_ws),
+                _exotel_to_elevenlabs(exotel_ws, el_ws, stream_sid_holder),
+                _elevenlabs_to_exotel(el_ws, exotel_ws, stream_sid_holder),
             )
 
     except WebSocketDisconnect:
@@ -112,7 +113,7 @@ async def stream(exotel_ws: WebSocket):
         log.info("Stream session ended")
 
 
-async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws):
+async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: list):
     """Candidate's voice -> ElevenLabs."""
     try:
         async for raw in exotel_ws.iter_text():
@@ -124,7 +125,9 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws):
 
             elif event == "start":
                 info = data.get("start", {})
-                log.info(f"Stream started — callSid: {info.get('callSid')}, streamSid: {info.get('streamSid')}")
+                stream_sid = info.get("streamSid") or info.get("stream_sid", "")
+                stream_sid_holder.append(stream_sid)
+                log.info(f"Stream started — callSid: {info.get('callSid')}, streamSid: {stream_sid}")
 
             elif event == "media":
                 audio_b64 = data["media"]["payload"]
@@ -140,7 +143,7 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws):
         log.error(f"Exotel→ElevenLabs error: {e}")
 
 
-async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket):
+async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: list):
     """Kavitha's voice -> candidate."""
     try:
         async for raw in el_ws:
@@ -150,8 +153,10 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket):
             if msg_type == "audio":
                 audio_b64 = data.get("audio_event", {}).get("audio_base_64", "")
                 if audio_b64:
+                    stream_sid = stream_sid_holder[0] if stream_sid_holder else ""
                     await exotel_ws.send_text(json.dumps({
                         "event": "media",
+                        "stream_sid": stream_sid,
                         "media": {"payload": audio_b64},
                     }))
 

@@ -203,6 +203,13 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
         log.info("ElevenLabs reader closed")
     except Exception as e:
         log.error(f"ElevenLabs→Exotel error: {e}")
+    finally:
+        # ElevenLabs conversation ended — close Exotel WS to hang up the call
+        try:
+            await exotel_ws.close()
+            log.info("Hung up Exotel call after ElevenLabs conversation ended")
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------

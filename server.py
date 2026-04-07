@@ -36,7 +36,7 @@ def get_ws_base_url():
     return os.getenv("SERVER_WS_BASE_URL", "wss://your-ngrok-url.ngrok.io")
 
 ELEVENLABS_WS_URL = (
-    f"wss://api.elevenlabs.io/v1/convai/phone-call"
+    f"wss://api.elevenlabs.io/v1/convai/conversation"
     f"?agent_id={ELEVENLABS_AGENT_ID}"
 )
 

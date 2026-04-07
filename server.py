@@ -159,16 +159,20 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                     stream_sid = stream_sid_holder[0] if stream_sid_holder else ""
                     seq += 1
                     chunk += 1
-                    await exotel_ws.send_text(json.dumps({
-                        "event": "media",
-                        "sequence_number": seq,
-                        "stream_sid": stream_sid,
-                        "media": {
-                            "chunk": chunk,
-                            "timestamp": str(chunk * 100),
-                            "payload": audio_b64,
-                        },
-                    }))
+                    try:
+                        await exotel_ws.send_text(json.dumps({
+                            "event": "media",
+                            "sequence_number": seq,
+                            "stream_sid": stream_sid,
+                            "media": {
+                                "chunk": chunk,
+                                "timestamp": str(chunk * 100),
+                                "payload": audio_b64,
+                            },
+                        }))
+                    except Exception:
+                        log.info("Exotel WS closed, stopping audio send")
+                        break
 
             elif msg_type == "ping":
                 event_id = data.get("ping_event", {}).get("event_id")

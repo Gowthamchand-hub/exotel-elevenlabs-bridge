@@ -94,7 +94,7 @@ async def stream(exotel_ws: WebSocket):
                 "conversation_config_override": {
                     "agent": {"agent_id": ELEVENLABS_AGENT_ID},
                     "audio": {
-                        "input":  {"encoding": "linear16", "sample_rate": 8000},
+                        "input":  {"encoding": "linear16", "sample_rate": 16000},
                         "output": {"encoding": "linear16", "sample_rate": 16000},
                     },
                 },
@@ -118,6 +118,7 @@ async def stream(exotel_ws: WebSocket):
 
 async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: list):
     """Candidate's voice -> ElevenLabs."""
+    resample_state = None
     try:
         async for raw in exotel_ws.iter_text():
             data = json.loads(raw)
@@ -134,6 +135,9 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: 
 
             elif event == "media":
                 audio_b64 = data["media"]["payload"]
+                raw = base64.b64decode(audio_b64)
+                raw, resample_state = audioop.ratecv(raw, 2, 1, 8000, 16000, resample_state)
+                audio_b64 = base64.b64encode(raw).decode()
                 await el_ws.send(json.dumps({"user_audio_chunk": audio_b64}))
 
             elif event == "stop":

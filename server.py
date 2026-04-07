@@ -93,7 +93,7 @@ async def stream(exotel_ws: WebSocket):
                     "agent": {"agent_id": ELEVENLABS_AGENT_ID},
                     "audio": {
                         "input":  {"encoding": "linear16", "sample_rate": 8000},
-                        "output": {"encoding": "linear16", "sample_rate": 16000},
+                        "output": {"encoding": "linear16", "sample_rate": 8000},
                     },
                 },
             }))

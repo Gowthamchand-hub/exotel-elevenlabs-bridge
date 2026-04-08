@@ -259,6 +259,7 @@ async def elevenlabs_webhook(request: Request):
         # ElevenLabs wraps actual data inside 'data' key
         data = payload.get("data", payload)
         log.info(f"Webhook analysis: {json.dumps(data.get('analysis', {}))}")
+        log.info(f"Webhook data keys: {list(data.keys())}")
         transcript = data.get("transcript", [])
         metadata = data.get("metadata", {})
         analysis = data.get("analysis", {})

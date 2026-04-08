@@ -262,14 +262,15 @@ async def elevenlabs_webhook(request: Request):
         conv_id = data.get("conversation_id", "")
         duration = metadata.get("call_duration_secs", "")
 
-        # Extract candidate details from analysis data_collection
+        # Extract candidate details from analysis data_collection (case-insensitive keys)
         dc = analysis.get("data_collection", {})
-        name       = dc.get("candidate_name", {}).get("value", "")
-        area       = dc.get("candidate_area", {}).get("value", "")
-        experience = dc.get("candidate_experience", {}).get("value", "")
-        languages  = dc.get("candidate_languages", {}).get("value", "")
-        timing     = dc.get("candidate_timing", {}).get("value", "")
-        salary     = dc.get("candidate_salary", {}).get("value", "")
+        dc_lower = {k.lower(): v for k, v in dc.items()}
+        name       = dc_lower.get("candidate_name", {}).get("value", "")
+        area       = dc_lower.get("candidate_area", {}).get("value", "")
+        experience = dc_lower.get("candidate_experience", {}).get("value", "")
+        languages  = dc_lower.get("candidate_languages", dc_lower.get("candidate_language", {})).get("value", "")
+        timing     = dc_lower.get("candidate_timing", {}).get("value", "")
+        salary     = dc_lower.get("candidate_salary", {}).get("value", "")
 
         from datetime import datetime
         date = datetime.now().strftime("%Y-%m-%d %H:%M")

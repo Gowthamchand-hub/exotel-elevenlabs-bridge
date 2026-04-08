@@ -5,5 +5,5 @@ requests==2.32.3
 python-dotenv==1.0.1
 python-multipart==0.0.12
 elevenlabs==1.50.3
-gspread==6.1.2
-google-auth==2.29.0
+gspread
+google-auth

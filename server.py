@@ -281,7 +281,8 @@ async def elevenlabs_webhook(request: Request):
         log.info(f"Saved candidate to sheet: {name} | {area} | conv={conv_id}")
 
     except Exception as e:
-        log.error(f"Webhook error: {e}")
+        log.error(f"Webhook error: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
 
     return Response(status_code=200)
 

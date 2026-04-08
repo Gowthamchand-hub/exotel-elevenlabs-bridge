@@ -18,6 +18,8 @@ import logging
 import audioop
 import base64
 import websockets
+import gspread
+from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import Response, JSONResponse
 from dotenv import load_dotenv
@@ -43,6 +45,24 @@ ELEVENLABS_WS_URL = (
 )
 
 app = FastAPI(title="Exotel-ElevenLabs Bridge")
+
+# ---------------------------------------------------------------------------
+# Google Sheets setup
+# ---------------------------------------------------------------------------
+
+SHEET_ID = "11uND6NBnSpX8zy72n7UXXyMBCpAS5GrA4lAETm4Xm_Q"
+
+def get_sheet():
+    creds_json = os.getenv("GOOGLE_CREDS_JSON")
+    if not creds_json:
+        raise RuntimeError("GOOGLE_CREDS_JSON env var not set")
+    creds_info = json.loads(creds_json)
+    creds = Credentials.from_service_account_info(
+        creds_info,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"]
+    )
+    gc = gspread.authorize(creds)
+    return gc.open_by_key(SHEET_ID).sheet1
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +245,45 @@ async def stream_config(request: Request):
     wss_url = f"{get_ws_base_url().rstrip('/')}/stream"
     log.info(f"Stream config requested — returning {wss_url}")
     return JSONResponse({"url": wss_url})
+
+
+# ---------------------------------------------------------------------------
+# /elevenlabs-webhook — ElevenLabs post-call webhook -> saves to Google Sheet
+# ---------------------------------------------------------------------------
+
+@app.post("/elevenlabs-webhook")
+async def elevenlabs_webhook(request: Request):
+    try:
+        data = await request.json()
+        transcript = data.get("transcript", [])
+        metadata = data.get("metadata", {})
+        analysis = data.get("analysis", {})
+
+        conv_id = data.get("conversation_id", "")
+        duration = metadata.get("call_duration_secs", "")
+
+        # Extract candidate details from analysis data_collection
+        dc = analysis.get("data_collection", {})
+        name       = dc.get("candidate_name", {}).get("value", "")
+        area       = dc.get("candidate_area", {}).get("value", "")
+        experience = dc.get("candidate_experience", {}).get("value", "")
+        languages  = dc.get("candidate_languages", {}).get("value", "")
+        timing     = dc.get("candidate_timing", {}).get("value", "")
+        salary     = dc.get("candidate_salary", {}).get("value", "")
+
+        from datetime import datetime
+        date = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        row = [date, name, area, experience, languages, timing, salary, duration, conv_id]
+
+        sheet = get_sheet()
+        sheet.append_row(row)
+        log.info(f"Saved candidate to sheet: {name} | {area} | conv={conv_id}")
+
+    except Exception as e:
+        log.error(f"Webhook error: {e}")
+
+    return Response(status_code=200)
 
 
 # ---------------------------------------------------------------------------

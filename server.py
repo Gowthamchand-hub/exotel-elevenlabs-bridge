@@ -254,8 +254,10 @@ async def stream_config(request: Request):
 @app.post("/elevenlabs-webhook")
 async def elevenlabs_webhook(request: Request):
     try:
-        data = await request.json()
-        log.info(f"Webhook payload keys: {list(data.keys())}")
+        payload = await request.json()
+        log.info(f"Webhook payload keys: {list(payload.keys())}")
+        # ElevenLabs wraps actual data inside 'data' key
+        data = payload.get("data", payload)
         log.info(f"Webhook analysis: {json.dumps(data.get('analysis', {}))}")
         transcript = data.get("transcript", [])
         metadata = data.get("metadata", {})

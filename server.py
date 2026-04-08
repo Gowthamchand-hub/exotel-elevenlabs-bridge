@@ -268,7 +268,7 @@ async def elevenlabs_webhook(request: Request):
         duration = metadata.get("call_duration_secs", "")
 
         # Extract candidate details from analysis data_collection (case-insensitive keys)
-        dc = analysis.get("data_collection", {})
+        dc = analysis.get("data_collection_results", analysis.get("data_collection", {}))
         dc_lower = {k.lower(): v for k, v in dc.items()}
         name       = dc_lower.get("candidate_name", {}).get("value", "")
         area       = dc_lower.get("candidate_area", {}).get("value", "")

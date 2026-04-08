@@ -18,8 +18,6 @@ import logging
 import audioop
 import base64
 import websockets
-import gspread
-from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import Response, JSONResponse
 from dotenv import load_dotenv
@@ -53,6 +51,8 @@ app = FastAPI(title="Exotel-ElevenLabs Bridge")
 SHEET_ID = "11uND6NBnSpX8zy72n7UXXyMBCpAS5GrA4lAETm4Xm_Q"
 
 def get_sheet():
+    import gspread
+    from google.oauth2.service_account import Credentials
     creds_json = os.getenv("GOOGLE_CREDS_JSON")
     if not creds_json:
         raise RuntimeError("GOOGLE_CREDS_JSON env var not set")

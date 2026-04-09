@@ -187,7 +187,7 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                     raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
                     # Subtle line noise
                     samples = list(struct.unpack(f"{len(raw)//2}h", raw))
-                    noise_level = 120
+                    noise_level = 500
                     samples = [max(-32768, min(32767, s + random.randint(-noise_level, noise_level))) for s in samples]
                     raw = struct.pack(f"{len(samples)}h", *samples)
                     audio_b64 = base64.b64encode(raw).decode()

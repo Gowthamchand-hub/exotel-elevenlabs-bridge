@@ -17,6 +17,8 @@ import asyncio
 import logging
 import audioop
 import base64
+import struct
+import random
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import Response, JSONResponse
@@ -183,6 +185,11 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                     # ElevenLabs outputs 16000Hz; resample to 8000Hz for Exotel PSTN
                     raw = base64.b64decode(audio_b64)
                     raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
+                    # Add subtle telephone noise for natural phone call feel
+                    samples = list(struct.unpack(f"{len(raw)//2}h", raw))
+                    noise_level = 80  # very subtle — like real phone line hiss
+                    samples = [max(-32768, min(32767, s + random.randint(-noise_level, noise_level))) for s in samples]
+                    raw = struct.pack(f"{len(samples)}h", *samples)
                     audio_b64 = base64.b64encode(raw).decode()
                     stream_sid = stream_sid_holder[0] if stream_sid_holder else ""
                     try:

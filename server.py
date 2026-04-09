@@ -119,12 +119,6 @@ async def stream(exotel_ws: WebSocket):
                         "input":  {"encoding": "linear16", "sample_rate": 16000},
                         "output": {"encoding": "linear16", "sample_rate": 16000},
                     },
-                    "tts": {
-                        "stability": 0.35,
-                        "similarity_boost": 0.85,
-                        "style": 0.60,
-                        "use_speaker_boost": True,
-                    },
                 },
             }))
 
@@ -191,35 +185,10 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                     # ElevenLabs outputs 16000Hz; resample to 8000Hz for Exotel PSTN
                     raw = base64.b64decode(audio_b64)
                     raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
+                    # Subtle line noise
                     samples = list(struct.unpack(f"{len(raw)//2}h", raw))
-
-                    # High-pass filter at 300Hz — removes bass, gives telephone "thin" sound
-                    import math
-                    rc = 1.0 / (2 * math.pi * 300)
-                    dt = 1.0 / 8000
-                    alpha = rc / (rc + dt)
-                    filtered = []
-                    prev_y = 0.0
-                    prev_x = float(samples[0]) if samples else 0.0
-                    for x in samples:
-                        y = alpha * (prev_y + x - prev_x)
-                        filtered.append(int(max(-32768, min(32767, y))))
-                        prev_y = y
-                        prev_x = x
-                    samples = filtered
-
-                    # Soft clip — simulates phone line compression
-                    threshold = 26000
-                    samples = [
-                        int((threshold + (abs(s) - threshold) * 0.3) * (1 if s > 0 else -1))
-                        if abs(s) > threshold else s
-                        for s in samples
-                    ]
-
-                    # Subtle line hiss
                     noise_level = 120
                     samples = [max(-32768, min(32767, s + random.randint(-noise_level, noise_level))) for s in samples]
-
                     raw = struct.pack(f"{len(samples)}h", *samples)
                     audio_b64 = base64.b64encode(raw).decode()
                     stream_sid = stream_sid_holder[0] if stream_sid_holder else ""

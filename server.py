@@ -158,22 +158,6 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: 
             elif event == "media":
                 audio_b64 = data["media"]["payload"]
                 raw = base64.b64decode(audio_b64)
-
-                # Send noise back to Exotel during candidate speech so noise is continuous
-                if stream_sid_holder:
-                    num_samples = len(raw) // 2
-                    noise = [random.randint(-400, 400) for _ in range(num_samples)]
-                    noise_raw = struct.pack(f"{num_samples}h", *noise)
-                    noise_b64 = base64.b64encode(noise_raw).decode()
-                    try:
-                        await exotel_ws.send_text(json.dumps({
-                            "event": "media",
-                            "streamSid": stream_sid_holder[0],
-                            "media": {"payload": noise_b64},
-                        }))
-                    except Exception:
-                        pass
-
                 raw, resample_state = audioop.ratecv(raw, 2, 1, 8000, 16000, resample_state)
                 audio_b64 = base64.b64encode(raw).decode()
                 await el_ws.send(json.dumps({"user_audio_chunk": audio_b64}))

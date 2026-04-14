@@ -46,6 +46,9 @@ ELEVENLABS_WS_URL = (
 
 app = FastAPI(title="Exotel-ElevenLabs Bridge")
 
+# In-memory map: conv_id -> phone number (cleared after webhook saves to sheet)
+conv_phone_cache: dict[str, str] = {}
+
 # ---------------------------------------------------------------------------
 # Google Sheets setup
 # ---------------------------------------------------------------------------
@@ -123,9 +126,10 @@ async def stream(exotel_ws: WebSocket):
             }))
 
             stream_sid_holder = []
+            phone_holder = []
             await asyncio.gather(
-                _exotel_to_elevenlabs(exotel_ws, el_ws, stream_sid_holder),
-                _elevenlabs_to_exotel(el_ws, exotel_ws, stream_sid_holder),
+                _exotel_to_elevenlabs(exotel_ws, el_ws, stream_sid_holder, phone_holder),
+                _elevenlabs_to_exotel(el_ws, exotel_ws, stream_sid_holder, phone_holder),
             )
 
     except WebSocketDisconnect:
@@ -138,7 +142,7 @@ async def stream(exotel_ws: WebSocket):
         log.info("Stream session ended")
 
 
-async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: list):
+async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: list, phone_holder: list):
     """Candidate's voice -> ElevenLabs."""
     resample_state = None
     try:
@@ -153,7 +157,10 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: 
                 info = data.get("start", {})
                 stream_sid = info.get("stream_sid") or info.get("streamSid", "")
                 stream_sid_holder.append(stream_sid)
-                log.info(f"Stream started — callSid: {info.get('call_sid')}, streamSid: {stream_sid}")
+                phone = info.get("from") or info.get("From") or info.get("from_number", "")
+                if phone:
+                    phone_holder.append(phone)
+                log.info(f"Stream started — callSid: {info.get('call_sid')}, streamSid: {stream_sid}, from: {phone}")
 
             elif event == "media":
                 audio_b64 = data["media"]["payload"]
@@ -172,7 +179,7 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: 
         log.error(f"Exotel→ElevenLabs error: {e}")
 
 
-async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: list):
+async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: list, phone_holder: list):
     """Kavitha's voice -> candidate."""
     try:
         async for raw in el_ws:
@@ -209,6 +216,9 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
             elif msg_type == "conversation_initiation_metadata":
                 conv_id = data.get("conversation_initiation_metadata_event", {}).get("conversation_id")
                 log.info(f"ElevenLabs conversation started — ID: {conv_id}")
+                if conv_id and phone_holder:
+                    conv_phone_cache[conv_id] = phone_holder[0]
+                    log.info(f"Linked conv {conv_id} -> {phone_holder[0]}")
 
             elif msg_type == "agent_response":
                 text = data.get("agent_response_event", {}).get("agent_response", "")
@@ -273,6 +283,7 @@ async def elevenlabs_webhook(request: Request):
 
         conv_id = data.get("conversation_id", "")
         duration = metadata.get("call_duration_secs", "")
+        hiding_reason = data.get("hiding_reason", "")
 
         # Extract candidate details from analysis data_collection (case-insensitive keys)
         dc = analysis.get("data_collection_results", analysis.get("data_collection", {}))
@@ -284,14 +295,30 @@ async def elevenlabs_webhook(request: Request):
         timing     = dc_lower.get("candidate_timing", {}).get("value", "")
         salary     = dc_lower.get("candidate_salary", {}).get("value", "")
 
+        # Look up phone number linked during the call
+        phone = conv_phone_cache.pop(conv_id, "")
+
+        # Determine call outcome
+        fields_collected = sum(1 for f in [name, area, experience, languages, timing, salary] if f)
+        if fields_collected >= 4:
+            outcome = "Screened"
+        elif timing and fields_collected <= 2:
+            outcome = "Callback Scheduled"
+        elif fields_collected > 0:
+            outcome = "Partial"
+        elif hiding_reason == "user_hangup":
+            outcome = "Hung Up Early"
+        else:
+            outcome = "Not Completed"
+
         from datetime import datetime
         date = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        row = [date, name, area, experience, languages, timing, salary, duration, conv_id]
+        row = [date, phone, name, area, experience, languages, timing, salary, duration, conv_id, outcome]
 
         sheet = get_sheet()
         sheet.append_row(row)
-        log.info(f"Saved candidate to sheet: {name} | {area} | conv={conv_id}")
+        log.info(f"Saved candidate to sheet: {name} | {area} | outcome={outcome} | conv={conv_id}")
 
     except Exception as e:
         log.error(f"Webhook error: {e}", exc_info=True)
@@ -315,7 +342,28 @@ async def status(request: Request):
     call_sid = data.get("CallSid", "unknown")
     call_status = data.get("Status", data.get("CallStatus", "unknown"))
     duration = data.get("Duration", "0")
-    log.info(f"Call {call_sid} ended — status: {call_status}, duration: {duration}s")
+    phone = data.get("From", data.get("CallFrom", ""))
+    log.info(f"Call {call_sid} ended — status: {call_status}, duration: {duration}s, from: {phone}")
+
+    # Write to sheet for calls that never connected to Kavitha
+    failed_outcomes = {
+        "no-answer": "No Answer",
+        "busy": "Busy - Network",
+        "failed": "Call Failed",
+        "canceled": "Canceled",
+    }
+    if call_status.lower() in failed_outcomes:
+        try:
+            from datetime import datetime
+            date = datetime.now().strftime("%Y-%m-%d %H:%M")
+            outcome = failed_outcomes[call_status.lower()]
+            row = [date, phone, "", "", "", "", "", "", duration, call_sid, outcome]
+            sheet = get_sheet()
+            sheet.append_row(row)
+            log.info(f"Saved failed call to sheet: {phone} | outcome={outcome}")
+        except Exception as e:
+            log.error(f"Failed to save call status to sheet: {e}")
+
     return Response(status_code=200)
 
 

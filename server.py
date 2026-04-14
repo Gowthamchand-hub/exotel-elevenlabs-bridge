@@ -284,6 +284,12 @@ async def elevenlabs_webhook(request: Request):
         conv_id = data.get("conversation_id", "")
         duration = metadata.get("call_duration_secs", "")
         hiding_reason = data.get("hiding_reason", "")
+        transcript_summary = data.get("transcript_summary", "")
+
+        # Which workflow nodes were visited during the call
+        visited = [v.get("agent_name", "") for v in data.get("visited_agents", [])]
+        visited_lower = [v.lower() for v in visited]
+        log.info(f"Visited nodes: {visited}")
 
         # Extract candidate details from analysis data_collection (case-insensitive keys)
         dc = analysis.get("data_collection_results", analysis.get("data_collection", {}))
@@ -298,27 +304,39 @@ async def elevenlabs_webhook(request: Request):
         # Look up phone number linked during the call
         phone = conv_phone_cache.pop(conv_id, "")
 
-        # Determine call outcome
+        # Determine outcome — use visited nodes first, fall back to fields collected
         fields_collected = sum(1 for f in [name, area, experience, languages, timing, salary] if f)
-        if fields_collected >= 4:
-            outcome = "Screened"
-        elif timing and fields_collected <= 2:
+        if any("not interested" in v for v in visited_lower):
+            outcome = "Not Interested"
+        elif any("schedule callback" in v or "callback" in v for v in visited_lower):
             outcome = "Callback Scheduled"
+        elif any("closing" in v for v in visited_lower) and fields_collected >= 4:
+            outcome = "Screened"
+        elif fields_collected >= 4:
+            outcome = "Screened"
+        elif hiding_reason == "user_hangup" and fields_collected == 0:
+            outcome = "Hung Up Early"
+        elif hiding_reason == "user_hangup":
+            outcome = "Hung Up Mid-Call"
         elif fields_collected > 0:
             outcome = "Partial"
-        elif hiding_reason == "user_hangup":
-            outcome = "Hung Up Early"
         else:
             outcome = "Not Completed"
+
+        # Short description — use transcript_summary if available, else build from visited nodes
+        if transcript_summary:
+            description = transcript_summary
+        else:
+            description = f"Nodes visited: {', '.join(visited) if visited else 'none'}"
 
         from datetime import datetime
         date = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        row = [date, phone, name, area, experience, languages, timing, salary, duration, conv_id, outcome]
+        row = [date, phone, name, area, experience, languages, timing, salary, duration, conv_id, outcome, description]
 
         sheet = get_sheet()
         sheet.append_row(row)
-        log.info(f"Saved candidate to sheet: {name} | {area} | outcome={outcome} | conv={conv_id}")
+        log.info(f"Saved candidate to sheet: {name} | outcome={outcome} | conv={conv_id}")
 
     except Exception as e:
         log.error(f"Webhook error: {e}", exc_info=True)
@@ -357,7 +375,7 @@ async def status(request: Request):
             from datetime import datetime
             date = datetime.now().strftime("%Y-%m-%d %H:%M")
             outcome = failed_outcomes[call_status.lower()]
-            row = [date, phone, "", "", "", "", "", "", duration, call_sid, outcome]
+            row = [date, phone, "", "", "", "", "", "", duration, call_sid, outcome, ""]
             sheet = get_sheet()
             sheet.append_row(row)
             log.info(f"Saved failed call to sheet: {phone} | outcome={outcome}")

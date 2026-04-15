@@ -192,10 +192,14 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                     # ElevenLabs outputs 16000Hz; resample to 8000Hz for Exotel PSTN
                     raw = base64.b64decode(audio_b64)
                     raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
-                    # Subtle line noise
+                    # Low-pitched background noise — changes every 8 samples (~1kHz) for a low hum
                     samples = list(struct.unpack(f"{len(raw)//2}h", raw))
                     noise_level = 500
-                    samples = [max(-32768, min(32767, s + random.randint(-noise_level, noise_level))) for s in samples]
+                    noise = []
+                    for i in range(0, len(samples), 8):
+                        n = random.randint(-noise_level, noise_level)
+                        noise.extend([n] * min(8, len(samples) - i))
+                    samples = [max(-32768, min(32767, s + noise[i])) for i, s in enumerate(samples)]
                     raw = struct.pack(f"{len(samples)}h", *samples)
                     audio_b64 = base64.b64encode(raw).decode()
                     stream_sid = stream_sid_holder[0] if stream_sid_holder else ""

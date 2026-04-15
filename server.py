@@ -191,8 +191,7 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                 if audio_b64:
                     # ElevenLabs outputs 16000Hz; resample to 8000Hz for Exotel PSTN
                     raw = base64.b64decode(audio_b64)
-                    # 19200 instead of 16000 = 1.2x speed up
-                    raw, _ = audioop.ratecv(raw, 2, 1, 19200, 8000, None)
+                    raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
                     # Subtle line noise
                     samples = list(struct.unpack(f"{len(raw)//2}h", raw))
                     noise_level = 500

@@ -127,10 +127,24 @@ async def stream(exotel_ws: WebSocket):
 
             stream_sid_holder = []
             phone_holder = []
-            await asyncio.gather(
-                _exotel_to_elevenlabs(exotel_ws, el_ws, stream_sid_holder, phone_holder),
-                _elevenlabs_to_exotel(el_ws, exotel_ws, stream_sid_holder, phone_holder),
-            )
+            task1 = asyncio.create_task(_exotel_to_elevenlabs(exotel_ws, el_ws, stream_sid_holder, phone_holder))
+            task2 = asyncio.create_task(_elevenlabs_to_exotel(el_ws, exotel_ws, stream_sid_holder, phone_holder))
+
+            # When either side disconnects, cancel the other immediately
+            done, pending = await asyncio.wait([task1, task2], return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            # Always close ElevenLabs when call ends
+            try:
+                await el_ws.close()
+                log.info("ElevenLabs connection closed")
+            except Exception:
+                pass
 
     except WebSocketDisconnect:
         log.info("Exotel disconnected")

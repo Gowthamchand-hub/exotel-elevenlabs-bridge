@@ -170,11 +170,19 @@ async def _exotel_to_elevenlabs(exotel_ws: WebSocket, el_ws, stream_sid_holder: 
                 await el_ws.send(json.dumps({"user_audio_chunk": audio_b64}))
 
             elif event == "stop":
-                log.info("Exotel stream stopped")
+                log.info("Exotel stream stopped — candidate hung up, closing ElevenLabs")
+                try:
+                    await el_ws.close()
+                except Exception:
+                    pass
                 break
 
     except WebSocketDisconnect:
-        log.info("Exotel reader disconnected")
+        log.info("Exotel disconnected — candidate hung up, closing ElevenLabs")
+        try:
+            await el_ws.close()
+        except Exception:
+            pass
     except Exception as e:
         log.error(f"Exotel→ElevenLabs error: {e}")
 

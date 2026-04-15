@@ -202,7 +202,7 @@ async def _elevenlabs_to_exotel(el_ws, exotel_ws: WebSocket, stream_sid_holder: 
                     raw, _ = audioop.ratecv(raw, 2, 1, 16000, 8000, None)
                     # Low-pitched background noise — changes every 8 samples (~1kHz) for a low hum
                     samples = list(struct.unpack(f"{len(raw)//2}h", raw))
-                    noise_level = 500
+                    noise_level = 150
                     noise = []
                     for i in range(0, len(samples), 8):
                         n = random.randint(-noise_level, noise_level)
